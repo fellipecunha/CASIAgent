@@ -155,30 +155,17 @@ def process_task(db, doc):
     except Exception as e:
         print(f"Failed to save screenshot: {e}")
 
-    # 4. Reporting: Update Firebase Status / Scheduling
+    # 4. Reporting: Update Firebase Status
     print("Updating task status in Firebase...")
     try:
-        interval_minutes = task_data.get('interval_minutes')
-        from datetime import datetime, timezone, timedelta
-        
-        if interval_minutes and isinstance(interval_minutes, int):
-            # Recurring Rule: Reschedule into the future, maintain 'pending'
-            new_time = datetime.now(timezone.utc) + timedelta(minutes=interval_minutes)
-            db.collection('casi_local_tasks').document(doc_id).update({
-                'status': 'pending',
-                'artifact_proof': artifact_path,
-                'scheduled_for': new_time,
-                'last_completed_at': firestore.SERVER_TIMESTAMP
-            })
-            print(f"--- Task {doc_id} RESCHEDULED for {interval_minutes}m from now ({new_time}) ---")
-        else:
-            # One-off Rule: Mark as 'completed'
-            db.collection('casi_local_tasks').document(doc_id).update({
-                'status': 'completed',
-                'artifact_proof': artifact_path,
-                'completed_at': firestore.SERVER_TIMESTAMP
-            })
-            print(f"--- Task {doc_id} marked as COMPLETED ---")
+        # Offload scheduling to the Firebase Cloud Cron architecture
+        # Always emit "completed". The Cloud Backend will securely detect if it's recurring.
+        db.collection('casi_local_tasks').document(doc_id).update({
+            'status': 'completed',
+            'artifact_proof': artifact_path,
+            'completed_at': firestore.SERVER_TIMESTAMP
+        })
+        print(f"--- Task {doc_id} marked as COMPLETED (Cloud will respawn if recurring) ---")
     except Exception as e:
         print(f"Failed to update task status: {e}")
 
@@ -221,28 +208,9 @@ def start_firebase_listener(db):
     col_query = db.collection('casi_local_tasks')
     col_watch = col_query.on_snapshot(on_snapshot)
     
-    # Keep the daemon thread alive and poll for scheduled tasks
+    # Keep the daemon thread alive so the on_snapshot listener stays active without blocking
     while True:
-        try:
-            now = datetime.now(timezone.utc)
-            query = db.collection('casi_local_tasks') \
-                .where('platform', '==', 'local') \
-                .where('status', '==', 'pending') \
-                .where('scheduled_for', '<=', now)
-                
-            docs = query.stream()
-            for doc in docs:
-                print(f"  -> Scheduled task {doc.id} is ready! Locking for processing...")
-                try:
-                    db.collection('casi_local_tasks').document(doc.id).update({'status': 'processing'})
-                    t = threading.Thread(target=process_task, args=(db, doc))
-                    t.start()
-                except Exception as e:
-                    print(f"  -> Error processing scheduled doc {doc.id}: {e}")
-        except Exception as e:
-            pass # Ignore polling errors
-            
-        time.sleep(30) # Check every 30 seconds
+        time.sleep(3600)
 
 def run_agent():
     print("Initializing CASI Agent...")
