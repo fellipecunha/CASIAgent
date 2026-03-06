@@ -100,8 +100,16 @@ class CASIAgentGUI(ctk.CTk):
         self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="CASI Task Queue", font=ctk.CTkFont(size=22, weight="bold"))
         self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
         
-        self.queue_scrollable = ctk.CTkScrollableFrame(self.sidebar_frame, width=280)
-        self.queue_scrollable.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+        self.tabs = ctk.CTkTabview(self.sidebar_frame, width=280)
+        self.tabs.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+        self.tabs.add("Active")
+        self.tabs.add("Completed")
+        
+        self.queue_scrollable = ctk.CTkScrollableFrame(self.tabs.tab("Active"), fg_color="transparent")
+        self.queue_scrollable.pack(fill="both", expand=True)
+        
+        self.completed_scrollable = ctk.CTkScrollableFrame(self.tabs.tab("Completed"), fg_color="transparent")
+        self.completed_scrollable.pack(fill="both", expand=True)
         
         self.add_btn = ctk.CTkButton(self.sidebar_frame, text="+ Add New Task", command=self.add_task_gui, font=ctk.CTkFont(weight="bold"))
         self.add_btn.grid(row=2, column=0, padx=20, pady=20, sticky="ew")
@@ -128,42 +136,64 @@ class CASIAgentGUI(ctk.CTk):
         
     def update_queue(self, tasks):
         if not self.winfo_exists(): return
+        
         for widget in self.queue_scrollable.winfo_children():
             widget.destroy()
+        for widget in self.completed_scrollable.winfo_children():
+            widget.destroy()
             
-        if not tasks:
-            lbl = ctk.CTkLabel(self.queue_scrollable, text="No tasks pending.", text_color="gray")
-            lbl.pack(pady=20)
-            return
+        active_tasks = [t for t in tasks if t['status'] not in ['completed', 'failed']]
+        completed_tasks = [t for t in tasks if t['status'] in ['completed', 'failed']]
 
-        for t in tasks:
-            is_processing = t['status'] == 'processing'
-            color = "#ff9800" if is_processing else "#b0bec5"
-            bg_color = "#333333" if is_processing else "#2b2b2b"
-            
-            frame = ctk.CTkFrame(self.queue_scrollable, fg_color=bg_color)
-            frame.pack(fill="x", padx=5, pady=5)
-            
-            bold_font = ctk.CTkFont(size=14, weight="bold")
-            title_lbl = ctk.CTkLabel(frame, text=t['name'][:30], font=bold_font, justify="left", text_color="white")
-            title_lbl.pack(anchor="w", padx=10, pady=(5,0))
-            
-            stat_lbl = ctk.CTkLabel(frame, text=f"• {t['status'].upper()}", text_color=color, font=ctk.CTkFont(size=11))
-            stat_lbl.pack(anchor="w", padx=10, pady=(0,5))
-            
-            btn_frame = ctk.CTkFrame(frame, fg_color="transparent")
-            btn_frame.pack(anchor="e", padx=10, pady=(0, 5))
-            
+        if not active_tasks:
+            ctk.CTkLabel(self.queue_scrollable, text="No active tasks.", text_color="gray").pack(pady=20)
+        else:
+            for t in active_tasks:
+                self._draw_task_card(self.queue_scrollable, t, is_active=True)
+                
+        if not completed_tasks:
+            ctk.CTkLabel(self.completed_scrollable, text="No completed tasks.", text_color="gray").pack(pady=20)
+        else:
+            for t in completed_tasks:
+                self._draw_task_card(self.completed_scrollable, t, is_active=False)
+
+    def _draw_task_card(self, parent_scrollable, t, is_active):
+        is_processing = t['status'] == 'processing'
+        color = "#ff9800" if is_processing else ("#4CAF50" if t['status'] == 'completed' else "#b0bec5")
+        bg_color = "#333333" if is_processing else "#2b2b2b"
+        
+        frame = ctk.CTkFrame(parent_scrollable, fg_color=bg_color)
+        frame.pack(fill="x", padx=5, pady=5)
+        
+        bold_font = ctk.CTkFont(size=14, weight="bold")
+        title_lbl = ctk.CTkLabel(frame, text=t['name'][:30], font=bold_font, justify="left", text_color="white")
+        title_lbl.pack(anchor="w", padx=10, pady=(5,0))
+        
+        stat_lbl = ctk.CTkLabel(frame, text=f"• {t['status'].upper()}", text_color=color, font=ctk.CTkFont(size=11))
+        stat_lbl.pack(anchor="w", padx=10, pady=(0,5))
+        
+        btn_frame = ctk.CTkFrame(frame, fg_color="transparent")
+        btn_frame.pack(anchor="e", padx=10, pady=(0, 5))
+        
+        if is_active:
             p_text = "Resume" if t['status'] == 'paused' else "Pause"
             p_cmd = lambda tid=t['id'], st=t['status']: self.pause_resume_task(tid, st)
-            p_btn = ctk.CTkButton(btn_frame, text=p_text, width=50, height=24, font=ctk.CTkFont(size=11), command=p_cmd)
-            p_btn.pack(side="left", padx=2)
+            ctk.CTkButton(btn_frame, text=p_text, width=50, height=24, font=ctk.CTkFont(size=11), command=p_cmd).pack(side="left", padx=2)
             
             e_btn = ctk.CTkButton(btn_frame, text="Edit", width=50, height=24, font=ctk.CTkFont(size=11), command=lambda tid=t['id']: self.edit_task_gui(tid))
             e_btn.pack(side="left", padx=2)
+        else:
+            r_cmd = lambda tid=t['id']: self.rerun_task(tid)
+            ctk.CTkButton(btn_frame, text="Rerun", width=50, height=24, font=ctk.CTkFont(size=11), command=r_cmd, fg_color="#4CAF50", hover_color="#388E3C").pack(side="left", padx=2)
             
-            d_btn = ctk.CTkButton(btn_frame, text="Del", width=40, height=24, fg_color="#d32f2f", hover_color="#b71c1c", font=ctk.CTkFont(size=11), command=lambda tid=t['id']: self.delete_task(tid))
-            d_btn.pack(side="left", padx=2)
+        d_btn = ctk.CTkButton(btn_frame, text="Del", width=40, height=24, fg_color="#d32f2f", hover_color="#b71c1c", font=ctk.CTkFont(size=11), command=lambda tid=t['id']: self.delete_task(tid))
+        d_btn.pack(side="left", padx=2)
+
+    def rerun_task(self, task_id):
+        try:
+            self.db.collection('casi_local_tasks').document(task_id).update({'status': 'pending'})
+        except Exception as e:
+            print(f"Failed to rerun task: {e}")
             
     def pause_resume_task(self, task_id, current_status):
         new_status = 'pending' if current_status == 'paused' else 'paused'
@@ -418,7 +448,7 @@ def start_firebase_listener(db):
                 task_data = doc_snap.to_dict() or {}
                 if task_data.get('platform') == 'local':
                     st = task_data.get('status', 'unknown')
-                    if st in ['pending', 'processing', 'paused']:
+                    if st in ['pending', 'processing', 'paused', 'completed', 'failed']:
                         pending_list.append({
                             'id': doc_snap.id, 
                             'name': task_data.get('task_name', 'Unnamed Task'), 
