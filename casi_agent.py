@@ -128,7 +128,7 @@ class CASIAgentGUI(ctk.CTk):
             widget.destroy()
             
         if not tasks:
-            lbl = ctk.CTkLabel(self.queue_scrollable, text="No local tasks pending.", text_color="gray")
+            lbl = ctk.CTkLabel(self.queue_scrollable, text="No cloud tasks pending.", text_color="gray")
             lbl.pack(pady=20)
             return
 
@@ -256,7 +256,7 @@ def process_task(db, doc):
         if interval_minutes:
             # User Preference: Handle Recurring Rule Locally - Reschedule into the future, maintain 'pending'
             new_time = datetime.now(timezone.utc) + timedelta(minutes=interval_minutes)
-            db.collection('casi_local_tasks').document(doc_id).update({
+            db.collection('casi_tasks').document(doc_id).update({
                 'status': 'pending',
                 'artifact_proof': artifact_path,
                 'scheduled_for': new_time,
@@ -265,7 +265,7 @@ def process_task(db, doc):
             print(f"--- Task {doc_id} RESCHEDULED for {interval_minutes}m from now ({new_time}) ---")
         else:
             # One-off Rule: Mark as 'completed'
-            db.collection('casi_local_tasks').document(doc_id).update({
+            db.collection('casi_tasks').document(doc_id).update({
                 'status': 'completed',
                 'artifact_proof': artifact_path,
                 'completed_at': firestore.SERVER_TIMESTAMP
@@ -277,7 +277,7 @@ def process_task(db, doc):
 from datetime import datetime, timezone
 
 def start_firebase_listener(db):
-    print("Firebase listener started. Monitoring casi_local_tasks...")
+    print("Firebase listener started. Monitoring casi_tasks...")
 
     # Create a callback to handle changes in the collection
     def on_snapshot(col_snapshot, changes, read_time):
@@ -288,7 +288,7 @@ def start_firebase_listener(db):
             pending_list = []
             for doc_snap in col_snapshot:
                 task_data = doc_snap.to_dict() or {}
-                if task_data.get('platform') == 'local':
+                if task_data.get('platform') == 'cloud':
                     st = task_data.get('status', 'unknown')
                     if st in ['pending', 'processing']:
                         pending_list.append({
@@ -308,7 +308,7 @@ def start_firebase_listener(db):
             print(f"[{change.type.name}] Doc ID: {doc.id} | platform: '{data.get('platform')}' | status: '{data.get('status')}'")
             
             # Persistent Listener rule: platform == 'local' and status == 'pending'
-            if data.get('platform') == 'local' and data.get('status') == 'pending':
+            if data.get('platform') == 'cloud' and data.get('status') == 'pending':
                 # Check if this task is scheduled for the future
                 scheduled_for = data.get('scheduled_for')
                 if scheduled_for:
@@ -321,7 +321,7 @@ def start_firebase_listener(db):
                 print(f"  -> Match found! Locking doc {doc.id} for processing...")
                 try:
                     # First, lock the doc so other listeners don't pick it up
-                    db.collection('casi_local_tasks').document(doc.id).update({'status': 'processing'})
+                    db.collection('casi_tasks').document(doc.id).update({'status': 'processing'})
                     
                     # Start processing on a separate thread
                     t = threading.Thread(target=process_task, args=(db, doc))
@@ -330,7 +330,7 @@ def start_firebase_listener(db):
                     print(f"  -> Error trying to process doc {doc.id}: {e}")
                 
     # Define query
-    col_query = db.collection('casi_local_tasks')
+    col_query = db.collection('casi_tasks')
     col_watch = col_query.on_snapshot(on_snapshot)
     
     # Keep the daemon thread alive but do NOT poll here. Polling goes to a separate thread.
@@ -344,9 +344,9 @@ def start_polling_loop(db):
             now = datetime.now(timezone.utc)
             # print(f"--- Triggering Polling Check at {now} ---")
             
-            # Filter for 'pending' locally and do the math in Python.
-            query = db.collection('casi_local_tasks') \
-                .where('platform', '==', 'local') \
+            # Filter for 'pending' cloud tasks and do the math in Python.
+            query = db.collection('casi_tasks') \
+                .where('platform', '==', 'cloud') \
                 .where('status', '==', 'pending')
                 
             docs = query.stream()
@@ -359,7 +359,7 @@ def start_polling_loop(db):
                         print(f"  -> Scheduled task {doc.id} is ready! Time arrived. Locking for processing...")
                         try:
                             # Safely set to processing so the listener loop catches it
-                            db.collection('casi_local_tasks').document(doc.id).update({'status': 'processing'})
+                            db.collection('casi_tasks').document(doc.id).update({'status': 'processing'})
                             t = threading.Thread(target=process_task, args=(db, doc))
                             t.start()
                         except Exception as e:
