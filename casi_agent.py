@@ -181,27 +181,37 @@ class CASIAgentGUI(ctk.CTk):
     def add_task_gui(self):
         w = ctk.CTkToplevel(self)
         w.title("Add New Agentic Task")
-        w.geometry("450x300")
+        w.geometry("450x380")
         w.grab_set()
         
         ctk.CTkLabel(w, text="Task Name:", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 0))
         name_entry = ctk.CTkEntry(w, width=350)
-        name_entry.pack(pady=(5, 15))
+        name_entry.pack(pady=(5, 10))
         
         ctk.CTkLabel(w, text="Agentic Prompt (Goals & Logic):", font=ctk.CTkFont(weight="bold")).pack(pady=(5, 0))
         prompt_entry = ctk.CTkEntry(w, width=350)
-        prompt_entry.pack(pady=(5, 20))
+        prompt_entry.pack(pady=(5, 10))
+        
+        ctk.CTkLabel(w, text="Schedule Interval (Minutes, Optional):", font=ctk.CTkFont(weight="bold")).pack(pady=(5, 0))
+        interval_entry = ctk.CTkEntry(w, width=350, placeholder_text="e.g. 60")
+        interval_entry.pack(pady=(5, 20))
         
         def save():
             try:
-                self.db.collection('casi_local_tasks').add({
+                task_doc = {
                     'task_name': name_entry.get(),
                     'platform': 'local',
                     'status': 'pending',
                     'task_type': 'agentic',
                     'agentic_prompt': prompt_entry.get(),
                     'created_at': firestore.SERVER_TIMESTAMP
-                })
+                }
+                
+                raw_interval = interval_entry.get().strip()
+                if raw_interval.isdigit():
+                    task_doc['interval_minutes'] = int(raw_interval)
+                    
+                self.db.collection('casi_local_tasks').add(task_doc)
                 w.destroy()
             except Exception as e:
                 print(f"Failed to add task: {e}")
@@ -219,25 +229,40 @@ class CASIAgentGUI(ctk.CTk):
             
         w = ctk.CTkToplevel(self)
         w.title("Edit Task")
-        w.geometry("450x300")
+        w.geometry("450x380")
         w.grab_set()
         
         ctk.CTkLabel(w, text="Task Name:", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 0))
         name_entry = ctk.CTkEntry(w, width=350)
         name_entry.insert(0, data.get('task_name', ''))
-        name_entry.pack(pady=(5, 15))
+        name_entry.pack(pady=(5, 10))
         
         ctk.CTkLabel(w, text="Agentic Prompt:", font=ctk.CTkFont(weight="bold")).pack(pady=(5, 0))
         prompt_entry = ctk.CTkEntry(w, width=350)
         prompt_entry.insert(0, data.get('agentic_prompt', ''))
-        prompt_entry.pack(pady=(5, 20))
+        prompt_entry.pack(pady=(5, 10))
+        
+        ctk.CTkLabel(w, text="Schedule Interval (Minutes, Optional):", font=ctk.CTkFont(weight="bold")).pack(pady=(5, 0))
+        interval_entry = ctk.CTkEntry(w, width=350)
+        interval = data.get('interval_minutes', '')
+        if interval:
+            interval_entry.insert(0, str(interval))
+        interval_entry.pack(pady=(5, 20))
         
         def save():
             try:
-                self.db.collection('casi_local_tasks').document(task_id).update({
+                updates = {
                     'task_name': name_entry.get(),
                     'agentic_prompt': prompt_entry.get()
-                })
+                }
+                
+                raw_interval = interval_entry.get().strip()
+                if raw_interval.isdigit():
+                    updates['interval_minutes'] = int(raw_interval)
+                elif raw_interval == "":
+                    updates['interval_minutes'] = firestore.DELETE_FIELD
+                    
+                self.db.collection('casi_local_tasks').document(task_id).update(updates)
                 w.destroy()
             except Exception as e:
                 print(f"Failed to edit task: {e}")
