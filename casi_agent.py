@@ -158,10 +158,17 @@ def process_task(db, doc):
     # 4. Reporting: Update Firebase Status / Scheduling
     print("Updating task status in Firebase...")
     try:
-        interval_minutes = task_data.get('interval_minutes')
+        interval_val = task_data.get('interval_minutes')
+        interval_minutes = None
+        if interval_val is not None:
+            try:
+                interval_minutes = int(float(interval_val))
+            except ValueError:
+                pass
+                
         from datetime import datetime, timezone, timedelta
         
-        if interval_minutes and isinstance(interval_minutes, int):
+        if interval_minutes:
             # User Preference: Handle Recurring Rule Locally - Reschedule into the future, maintain 'pending'
             new_time = datetime.now(timezone.utc) + timedelta(minutes=interval_minutes)
             db.collection('casi_local_tasks').document(doc_id).update({
