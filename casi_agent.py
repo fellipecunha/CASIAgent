@@ -186,6 +186,9 @@ class CASIAgentGUI(ctk.CTk):
             r_cmd = lambda tid=t['id']: self.rerun_task(tid)
             ctk.CTkButton(btn_frame, text="Rerun", width=50, height=24, font=ctk.CTkFont(size=11), command=r_cmd, fg_color="#4CAF50", hover_color="#388E3C").pack(side="left", padx=2)
             
+            e_btn = ctk.CTkButton(btn_frame, text="Edit", width=50, height=24, font=ctk.CTkFont(size=11), command=lambda tid=t['id']: self.edit_task_gui(tid))
+            e_btn.pack(side="left", padx=2)
+            
         d_btn = ctk.CTkButton(btn_frame, text="Del", width=40, height=24, fg_color="#d32f2f", hover_color="#b71c1c", font=ctk.CTkFont(size=11), command=lambda tid=t['id']: self.delete_task(tid))
         d_btn.pack(side="left", padx=2)
 
