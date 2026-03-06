@@ -14,27 +14,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-import traceback
-
-class LoggerWriter:
-    def __init__(self, filename):
-        self.filename = filename
-    def write(self, message):
-        try:
-            with open(self.filename, 'a', encoding='utf-8') as f:
-                f.write(message)
-        except Exception:
-            pass
-    def flush(self):
-        pass
-
-log_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), 'agent_debug.log')
-sys.stdout = LoggerWriter(log_path)
-sys.stderr = sys.stdout
-    
-print("\\n\\n--- NEW SESSION ---")
-print(f"Agent started at {time.strftime('%Y-%m-%d %H:%M:%S')}")
-
 # Setup paths
 if hasattr(sys, '_MEIPASS'):
     # Running in PyInstaller bundle
@@ -176,37 +155,17 @@ def process_task(db, doc):
     except Exception as e:
         print(f"Failed to save screenshot: {e}")
 
-    # 4. Reporting: Update Firebase Status / Scheduling
+    # 4. Reporting: Update Firebase Status
     print("Updating task status in Firebase...")
     try:
-        interval_val = task_data.get('interval_minutes')
-        interval_minutes = None
-        if interval_val is not None:
-            try:
-                interval_minutes = int(float(interval_val))
-            except ValueError:
-                pass
-                
-        from datetime import datetime, timezone, timedelta
-        
-        if interval_minutes:
-            # User Preference: Handle Recurring Rule Locally - Reschedule into the future, maintain 'pending'
-            new_time = datetime.now(timezone.utc) + timedelta(minutes=interval_minutes)
-            db.collection('casi_local_tasks').document(doc_id).update({
-                'status': 'pending',
-                'artifact_proof': artifact_path,
-                'scheduled_for': new_time,
-                'last_completed_at': firestore.SERVER_TIMESTAMP
-            })
-            print(f"--- Task {doc_id} RESCHEDULED for {interval_minutes}m from now ({new_time}) ---")
-        else:
-            # One-off Rule: Mark as 'completed'
-            db.collection('casi_local_tasks').document(doc_id).update({
-                'status': 'completed',
-                'artifact_proof': artifact_path,
-                'completed_at': firestore.SERVER_TIMESTAMP
-            })
-            print(f"--- Task {doc_id} marked as COMPLETED ---")
+        # Offload scheduling to the Firebase Cloud Cron architecture
+        # Always emit "completed". The Cloud Backend will securely detect if it's recurring.
+        db.collection('casi_local_tasks').document(doc_id).update({
+            'status': 'completed',
+            'artifact_proof': artifact_path,
+            'completed_at': firestore.SERVER_TIMESTAMP
+        })
+        print(f"--- Task {doc_id} marked as COMPLETED (Cloud will respawn if recurring) ---")
     except Exception as e:
         print(f"Failed to update task status: {e}")
 
@@ -245,42 +204,13 @@ def start_firebase_listener(db):
                 except Exception as e:
                     print(f"  -> Error trying to process doc {doc.id}: {e}")
                 
-    # Keep the daemon thread alive but do NOT poll here. Polling goes to a separate thread.
+    # Define query
+    col_query = db.collection('casi_local_tasks')
+    col_watch = col_query.on_snapshot(on_snapshot)
+    
+    # Keep the daemon thread alive so the on_snapshot listener stays active without blocking
     while True:
         time.sleep(3600)
-
-def start_polling_loop(db):
-    print("Background polling thread initialized and entering 10s cycle...")
-    while True:
-        try:
-            now = datetime.now(timezone.utc)
-            # print(f"--- Triggering Polling Check at {now} ---")
-            
-            # Filter for 'pending' locally and do the math in Python.
-            query = db.collection('casi_local_tasks') \
-                .where('platform', '==', 'local') \
-                .where('status', '==', 'pending')
-                
-            docs = query.stream()
-            for doc in docs:
-                data = doc.to_dict() or {}
-                scheduled_for = data.get('scheduled_for')
-                
-                if scheduled_for:
-                    if scheduled_for <= now:
-                        print(f"  -> Scheduled task {doc.id} is ready! Time arrived. Locking for processing...")
-                        try:
-                            # Safely set to processing so the listener loop catches it
-                            db.collection('casi_local_tasks').document(doc.id).update({'status': 'processing'})
-                            t = threading.Thread(target=process_task, args=(db, doc))
-                            t.start()
-                        except Exception as e:
-                            print(f"  -> Error processing scheduled doc {doc.id}: {e}")
-        except Exception as e:
-            print(f"Polling loop error: {e}")
-            pass
-            
-        time.sleep(10) # 10s check is much faster and precise
 
 def run_agent():
     print("Initializing CASI Agent...")
@@ -299,10 +229,6 @@ def run_agent():
         # Start listener thread
         listener_thread = threading.Thread(target=start_firebase_listener, args=(db,), daemon=True)
         listener_thread.start()
-        
-        # Start polling thread
-        polling_thread = threading.Thread(target=start_polling_loop, args=(db,), daemon=True)
-        polling_thread.start()
     
     # Create and run System Tray icon (blocks the main thread)
     print("Starting Desktop Engine Tray Icon...")
