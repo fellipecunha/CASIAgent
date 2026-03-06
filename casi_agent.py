@@ -86,22 +86,37 @@ class CASIAgentGUI(ctk.CTk):
         self.db = db
         self.title("CASI Agent - Desktop Automation Core")
         self.geometry("1100x700")
+        # Advanced Premium Colors System
+        self._bg_color = "#0F172A"          # Deep rich slate background
+        self._surface = "#1E293B"           # Elevated panel background
+        self._surface_light = "#334155"     # Lighter hover/card state
+        self._primary = "#3B82F6"           # Vibrant modern blue
+        self._primary_hover = "#2563EB"
+        self._text = "#F8FAFC"
+        self._text_muted = "#94A3B8"
+        self._accent_green = "#10B981"
+        self._accent_green_hover = "#059669"
+        self._accent_red = "#EF4444"
+        self._accent_red_hover = "#DC2626"
+        self._accent_orange = "#F59E0B"
+        
+        # Base Application styling
         ctk.set_appearance_mode("dark")
-        ctk.set_default_color_theme("blue")
+        self.configure(fg_color=self._bg_color)
         
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
         
-        # Sidebar Queue
-        self.sidebar_frame = ctk.CTkFrame(self, width=320, corner_radius=0)
+        # Sidebar Queue with elevated style
+        self.sidebar_frame = ctk.CTkFrame(self, width=340, corner_radius=0, fg_color=self._surface)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
         self.sidebar_frame.grid_rowconfigure(1, weight=1)
         
-        self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="CASI Task Queue", font=ctk.CTkFont(size=22, weight="bold"))
-        self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
+        self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="CASI Control Center", font=ctk.CTkFont(family="Segoe UI", size=24, weight="bold"), text_color=self._text)
+        self.logo_label.grid(row=0, column=0, padx=20, pady=(30, 15), sticky="w")
         
-        self.tabs = ctk.CTkTabview(self.sidebar_frame, width=280)
-        self.tabs.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+        self.tabs = ctk.CTkTabview(self.sidebar_frame, width=300, fg_color="transparent", text_color=self._text, segmented_button_selected_color=self._primary, segmented_button_selected_hover_color=self._primary_hover)
+        self.tabs.grid(row=1, column=0, padx=15, pady=0, sticky="nsew")
         self.tabs.add("Active")
         self.tabs.add("Completed")
         
@@ -111,19 +126,20 @@ class CASIAgentGUI(ctk.CTk):
         self.completed_scrollable = ctk.CTkScrollableFrame(self.tabs.tab("Completed"), fg_color="transparent")
         self.completed_scrollable.pack(fill="both", expand=True)
         
-        self.add_btn = ctk.CTkButton(self.sidebar_frame, text="+ Add New Task", command=self.add_task_gui, font=ctk.CTkFont(weight="bold"))
-        self.add_btn.grid(row=2, column=0, padx=20, pady=20, sticky="ew")
+        self.add_btn = ctk.CTkButton(self.sidebar_frame, text="+ Create Workflow", command=self.add_task_gui, font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"), fg_color=self._primary, hover_color=self._primary_hover, height=45, corner_radius=8)
+        self.add_btn.grid(row=2, column=0, padx=20, pady=25, sticky="ew")
         
-        # Main Viewer pane
+        # Main Viewer pane (glassy terminal approach)
         self.main_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
-        self.main_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        self.main_frame.grid(row=0, column=1, sticky="nsew", padx=25, pady=25)
         self.main_frame.grid_rowconfigure(1, weight=1)
         self.main_frame.grid_columnconfigure(0, weight=1)
         
-        self.log_header = ctk.CTkLabel(self.main_frame, text="Live Execution Logic Logs", font=ctk.CTkFont(size=24, weight="bold"))
-        self.log_header.grid(row=0, column=0, sticky="nw", pady=(0, 10))
+        self.log_header = ctk.CTkLabel(self.main_frame, text="Live Execution Trace", font=ctk.CTkFont(family="Segoe UI", size=20, weight="bold"), text_color=self._text)
+        self.log_header.grid(row=0, column=0, sticky="nw", pady=(0, 15))
         
-        self.log_box = ctk.CTkTextbox(self.main_frame, font=ctk.CTkFont(family="Consolas", size=13))
+        # Premium terminal aesthetic
+        self.log_box = ctk.CTkTextbox(self.main_frame, font=ctk.CTkFont(family="Consolas", size=13), fg_color=self._surface, text_color="#A78BFA", corner_radius=12, border_width=1, border_color="#334155")
         self.log_box.grid(row=1, column=0, sticky="nsew")
         self.log_box.configure(state="disabled")
         
@@ -159,38 +175,51 @@ class CASIAgentGUI(ctk.CTk):
 
     def _draw_task_card(self, parent_scrollable, t, is_active):
         is_processing = t['status'] == 'processing'
-        color = "#ff9800" if is_processing else ("#4CAF50" if t['status'] == 'completed' else "#b0bec5")
-        bg_color = "#333333" if is_processing else "#2b2b2b"
+        # Rich contextual coloring 
+        if is_processing:
+            color = self._accent_orange
+            bg_color = self._surface_light
+        elif t['status'] == 'completed':
+            color = self._accent_green
+            bg_color = self._surface
+        elif t['status'] == 'paused':
+            color = self._accent_red
+            bg_color = self._surface_light
+        else:
+            color = self._text_muted
+            bg_color = self._surface
+            
+        frame = ctk.CTkFrame(parent_scrollable, fg_color=bg_color, corner_radius=10, border_color="#334155", border_width=1)
+        frame.pack(fill="x", padx=2, pady=6)
         
-        frame = ctk.CTkFrame(parent_scrollable, fg_color=bg_color)
-        frame.pack(fill="x", padx=5, pady=5)
+        bold_font = ctk.CTkFont(family="Segoe UI", size=15, weight="bold")
+        title_lbl = ctk.CTkLabel(frame, text=t['name'][:30], font=bold_font, justify="left", text_color=self._text)
+        title_lbl.pack(anchor="w", padx=12, pady=(10,2))
         
-        bold_font = ctk.CTkFont(size=14, weight="bold")
-        title_lbl = ctk.CTkLabel(frame, text=t['name'][:30], font=bold_font, justify="left", text_color="white")
-        title_lbl.pack(anchor="w", padx=10, pady=(5,0))
-        
-        stat_lbl = ctk.CTkLabel(frame, text=f"• {t['status'].upper()}", text_color=color, font=ctk.CTkFont(size=11))
-        stat_lbl.pack(anchor="w", padx=10, pady=(0,5))
+        stat_lbl = ctk.CTkLabel(frame, text=f"• {t['status'].upper()}", text_color=color, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"))
+        stat_lbl.pack(anchor="w", padx=12, pady=(0,10))
         
         btn_frame = ctk.CTkFrame(frame, fg_color="transparent")
-        btn_frame.pack(anchor="e", padx=10, pady=(0, 5))
+        btn_frame.pack(anchor="e", padx=10, pady=(0, 10))
+        
+        btn_font = ctk.CTkFont(family="Segoe UI", size=11, weight="bold")
         
         if is_active:
             p_text = "Resume" if t['status'] == 'paused' else "Pause"
             p_cmd = lambda tid=t['id'], st=t['status']: self.pause_resume_task(tid, st)
-            ctk.CTkButton(btn_frame, text=p_text, width=50, height=24, font=ctk.CTkFont(size=11), command=p_cmd).pack(side="left", padx=2)
+            ctk.CTkButton(btn_frame, text=p_text, width=54, height=26, corner_radius=6, font=btn_font, fg_color=self._surface_light, hover_color="#475569", text_color=self._text, command=p_cmd).pack(side="left", padx=3)
             
-            e_btn = ctk.CTkButton(btn_frame, text="Edit", width=50, height=24, font=ctk.CTkFont(size=11), command=lambda tid=t['id']: self.edit_task_gui(tid))
-            e_btn.pack(side="left", padx=2)
+            e_btn = ctk.CTkButton(btn_frame, text="Edit", width=54, height=26, corner_radius=6, font=btn_font, fg_color=self._surface_light, hover_color="#475569", text_color=self._text, command=lambda tid=t['id']: self.edit_task_gui(tid))
+            e_btn.pack(side="left", padx=3)
         else:
             r_cmd = lambda tid=t['id']: self.rerun_task(tid)
-            ctk.CTkButton(btn_frame, text="Rerun", width=50, height=24, font=ctk.CTkFont(size=11), command=r_cmd, fg_color="#4CAF50", hover_color="#388E3C").pack(side="left", padx=2)
+            ctk.CTkButton(btn_frame, text="Rerun", width=54, height=26, corner_radius=6, font=btn_font, command=r_cmd, fg_color=self._accent_green, hover_color=self._accent_green_hover).pack(side="left", padx=3)
             
-            e_btn = ctk.CTkButton(btn_frame, text="Edit", width=50, height=24, font=ctk.CTkFont(size=11), command=lambda tid=t['id']: self.edit_task_gui(tid))
-            e_btn.pack(side="left", padx=2)
+            e_btn = ctk.CTkButton(btn_frame, text="Edit", width=54, height=26, corner_radius=6, font=btn_font, fg_color=self._surface_light, hover_color="#475569", text_color=self._text, command=lambda tid=t['id']: self.edit_task_gui(tid))
+            e_btn.pack(side="left", padx=3)
             
-        d_btn = ctk.CTkButton(btn_frame, text="Del", width=40, height=24, fg_color="#d32f2f", hover_color="#b71c1c", font=ctk.CTkFont(size=11), command=lambda tid=t['id']: self.delete_task(tid))
-        d_btn.pack(side="left", padx=2)
+        d_btn = ctk.CTkButton(btn_frame, text="Del", width=44, height=26, corner_radius=6, font=btn_font, fg_color=self._accent_red, hover_color=self._accent_red_hover, command=lambda tid=t['id']: self.delete_task(tid))
+        d_btn.pack(side="left", padx=3)
 
     def rerun_task(self, task_id):
         try:
