@@ -1,0 +1,7 @@
+firebase-admin
+pystray
+Pillow
+plyer
+pyautogui
+python-dotenv
+pyinstaller
