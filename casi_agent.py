@@ -232,22 +232,32 @@ def start_firebase_listener(db):
     while True:
         try:
             now = datetime.now(timezone.utc)
+            # We don't use .where('scheduled_for') because it requires a Firebase Composite Index.
+            # We filter for 'pending' locally and do the math in Python.
             query = db.collection('casi_local_tasks') \
                 .where('platform', '==', 'local') \
-                .where('status', '==', 'pending') \
-                .where('scheduled_for', '<=', now)
+                .where('status', '==', 'pending')
                 
             docs = query.stream()
             for doc in docs:
-                print(f"  -> Scheduled task {doc.id} is ready! Locking for processing...")
-                try:
-                    db.collection('casi_local_tasks').document(doc.id).update({'status': 'processing'})
-                    t = threading.Thread(target=process_task, args=(db, doc))
-                    t.start()
-                except Exception as e:
-                    print(f"  -> Error processing scheduled doc {doc.id}: {e}")
+                data = doc.to_dict() or {}
+                scheduled_for = data.get('scheduled_for')
+                
+                # Check if it has a schedule
+                if scheduled_for:
+                    # Only run if the schedule time has passed
+                    if scheduled_for <= now:
+                        print(f"  -> Scheduled task {doc.id} is ready! Time arrived. Locking for processing...")
+                        try:
+                            # Safely set to processing so the listener loop catches it
+                            db.collection('casi_local_tasks').document(doc.id).update({'status': 'processing'})
+                            t = threading.Thread(target=process_task, args=(db, doc))
+                            t.start()
+                        except Exception as e:
+                            print(f"  -> Error processing scheduled doc {doc.id}: {e}")
         except Exception as e:
-            pass # Ignore polling errors
+            print(f"Polling loop error: {e}")
+            pass
             
         time.sleep(30) # Check every 30 seconds
 
