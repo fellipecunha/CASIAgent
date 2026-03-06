@@ -59,9 +59,27 @@ def execute_vision_loop(db, doc, task_name, agentic_prompt):
     client = OpenAI(api_key=OPENAI_API_KEY)
     
     with sync_playwright() as p:
-        # Launch non-headless browser
-        browser = p.chromium.launch(headless=False)
-        page = browser.new_page(viewport={"width": 1280, "height": 800})
+        # Detect actual user Playwright install path on Windows instead of PyInstaller Temp
+        # Usually: C:\Users\Username\AppData\Local\ms-playwright\chromium-XXXX\chrome-win64\chrome.exe
+        import glob
+        local_app_data = os.getenv('LOCALAPPDATA')
+        playwright_path = os.path.join(local_app_data, 'ms-playwright', 'chromium-*', 'chrome-win*', 'chrome.exe')
+        matched_paths = glob.glob(playwright_path)
+        
+        executable_path = matched_paths[0] if matched_paths else None
+        print(f"Playwright routing to actual user executable: {executable_path}")
+        
+        # Launch non-headless browser with a persistent context to save logins/cookies
+        user_data_dir = os.path.join(ROOT_DIR, "browser_data")
+        browser_context = p.chromium.launch_persistent_context(
+            user_data_dir=user_data_dir,
+            headless=False,
+            executable_path=executable_path,
+            viewport={"width": 1280, "height": 800}
+        )
+        
+        # Use the default page created by persistent context
+        page = browser_context.pages[0] if browser_context.pages else browser_context.new_page()
         
         history = []
         max_steps = 20
@@ -146,7 +164,7 @@ def execute_vision_loop(db, doc, task_name, agentic_prompt):
                 print(f"Vision loop error: {e}")
                 time.sleep(2)
                 
-        browser.close()
+        browser_context.close()
     
     # Clean up temp screenshot
     if os.path.exists(os.path.join(APP_DIR, "temp_screenshot.png")):
