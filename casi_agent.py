@@ -224,16 +224,18 @@ def start_firebase_listener(db):
                 except Exception as e:
                     print(f"  -> Error trying to process doc {doc.id}: {e}")
                 
-    # Define query
-    col_query = db.collection('casi_local_tasks')
-    col_watch = col_query.on_snapshot(on_snapshot)
-    
-    # Keep the daemon thread alive and poll for locally scheduled tasks
+    # Keep the daemon thread alive but do NOT poll here. Polling goes to a separate thread.
+    while True:
+        time.sleep(3600)
+
+def start_polling_loop(db):
+    print("Background polling thread initialized and entering 10s cycle...")
     while True:
         try:
             now = datetime.now(timezone.utc)
-            # We don't use .where('scheduled_for') because it requires a Firebase Composite Index.
-            # We filter for 'pending' locally and do the math in Python.
+            # print(f"--- Triggering Polling Check at {now} ---")
+            
+            # Filter for 'pending' locally and do the math in Python.
             query = db.collection('casi_local_tasks') \
                 .where('platform', '==', 'local') \
                 .where('status', '==', 'pending')
@@ -243,9 +245,7 @@ def start_firebase_listener(db):
                 data = doc.to_dict() or {}
                 scheduled_for = data.get('scheduled_for')
                 
-                # Check if it has a schedule
                 if scheduled_for:
-                    # Only run if the schedule time has passed
                     if scheduled_for <= now:
                         print(f"  -> Scheduled task {doc.id} is ready! Time arrived. Locking for processing...")
                         try:
@@ -259,7 +259,7 @@ def start_firebase_listener(db):
             print(f"Polling loop error: {e}")
             pass
             
-        time.sleep(30) # Check every 30 seconds
+        time.sleep(10) # 10s check is much faster and precise
 
 def run_agent():
     print("Initializing CASI Agent...")
@@ -278,6 +278,10 @@ def run_agent():
         # Start listener thread
         listener_thread = threading.Thread(target=start_firebase_listener, args=(db,), daemon=True)
         listener_thread.start()
+        
+        # Start polling thread
+        polling_thread = threading.Thread(target=start_polling_loop, args=(db,), daemon=True)
+        polling_thread.start()
     
     # Create and run System Tray icon (blocks the main thread)
     print("Starting Desktop Engine Tray Icon...")
