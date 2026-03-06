@@ -12,7 +12,7 @@ def trigger_vision_task():
         pass # Already initialized
         
     db = firestore.client()
-    doc_ref = db.collection('casi_tasks').document()
+    doc_ref = db.collection('casi_local_tasks').document()
     doc_ref.set({
         'task_name': 'Test Google Search (Vision)',
         'platform': 'cloud',

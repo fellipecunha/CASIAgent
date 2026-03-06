@@ -53,7 +53,7 @@ def execute_vision_loop(db, doc, task_name, agentic_prompt):
     
     if not OPENAI_API_KEY:
         print("ERROR: OPENAI_API_KEY not found in environment.")
-        db.collection('casi_tasks').document(doc.id).update({'status': 'failed'})
+        db.collection('casi_local_tasks').document(doc.id).update({'status': 'failed'})
         return
 
     client = OpenAI(api_key=OPENAI_API_KEY)
@@ -173,7 +173,7 @@ def execute_vision_loop(db, doc, task_name, agentic_prompt):
     print("Vision Loop Completed. Deferring Firebase status update to main process_task handler.")
 
 def start_firebase_listener(db):
-    print("Firebase listener for AGENTIC tasks started. Monitoring casi_tasks...")
+    print("Firebase listener for AGENTIC tasks started. Monitoring casi_local_tasks...")
 
     def on_snapshot(col_snapshot, changes, read_time):
         for change in changes:
@@ -181,11 +181,11 @@ def start_firebase_listener(db):
             data = doc.to_dict() or {}
             
             # Listen purely for agentic tasks
-            if data.get('platform') == 'cloud' and data.get('status') == 'pending' and data.get('task_type') == 'agentic':
+            if data.get('platform') == 'local' and data.get('status') == 'pending' and data.get('task_type') == 'agentic':
                 print(f"  -> Agentic Match found! Locking doc {doc.id} for processing...")
                 try:
                     # Lock for processing
-                    db.collection('casi_tasks').document(doc.id).update({'status': 'processing'})
+                    db.collection('casi_local_tasks').document(doc.id).update({'status': 'processing'})
                     
                     # Start async vision execution
                     task_name = data.get('task_name', 'Unknown Task')
@@ -195,7 +195,7 @@ def start_firebase_listener(db):
                 except Exception as e:
                     print(f"  -> Error trying to process doc {doc.id}: {e}")
                     
-    col_query = db.collection('casi_tasks')
+    col_query = db.collection('casi_local_tasks')
     col_watch = col_query.on_snapshot(on_snapshot)
     
     while True:
