@@ -181,7 +181,7 @@ class CASIAgentGUI(ctk.CTk):
     def add_task_gui(self):
         w = ctk.CTkToplevel(self)
         w.title("Add New Agentic Task")
-        w.geometry("450x380")
+        w.geometry("450x450")
         w.grab_set()
         
         ctk.CTkLabel(w, text="Task Name:", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 0))
@@ -189,7 +189,7 @@ class CASIAgentGUI(ctk.CTk):
         name_entry.pack(pady=(5, 10))
         
         ctk.CTkLabel(w, text="Agentic Prompt (Goals & Logic):", font=ctk.CTkFont(weight="bold")).pack(pady=(5, 0))
-        prompt_entry = ctk.CTkEntry(w, width=350)
+        prompt_entry = ctk.CTkTextbox(w, width=350, height=100)
         prompt_entry.pack(pady=(5, 10))
         
         ctk.CTkLabel(w, text="Schedule Interval (Minutes, Optional):", font=ctk.CTkFont(weight="bold")).pack(pady=(5, 0))
@@ -203,7 +203,7 @@ class CASIAgentGUI(ctk.CTk):
                     'platform': 'local',
                     'status': 'pending',
                     'task_type': 'agentic',
-                    'agentic_prompt': prompt_entry.get(),
+                    'agentic_prompt': prompt_entry.get("0.0", "end").strip(),
                     'created_at': firestore.SERVER_TIMESTAMP
                 }
                 
@@ -229,7 +229,7 @@ class CASIAgentGUI(ctk.CTk):
             
         w = ctk.CTkToplevel(self)
         w.title("Edit Task")
-        w.geometry("450x380")
+        w.geometry("450x450")
         w.grab_set()
         
         ctk.CTkLabel(w, text="Task Name:", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 0))
@@ -237,9 +237,10 @@ class CASIAgentGUI(ctk.CTk):
         name_entry.insert(0, data.get('task_name', ''))
         name_entry.pack(pady=(5, 10))
         
-        ctk.CTkLabel(w, text="Agentic Prompt:", font=ctk.CTkFont(weight="bold")).pack(pady=(5, 0))
-        prompt_entry = ctk.CTkEntry(w, width=350)
-        prompt_entry.insert(0, data.get('agentic_prompt', ''))
+        ctk.CTkLabel(w, text="Prompt / Logic:", font=ctk.CTkFont(weight="bold")).pack(pady=(5, 0))
+        prompt_entry = ctk.CTkTextbox(w, width=350, height=100)
+        prompt_text = data.get('agentic_prompt', data.get('skills_content', ''))
+        prompt_entry.insert("0.0", prompt_text)
         prompt_entry.pack(pady=(5, 10))
         
         ctk.CTkLabel(w, text="Schedule Interval (Minutes, Optional):", font=ctk.CTkFont(weight="bold")).pack(pady=(5, 0))
@@ -252,9 +253,14 @@ class CASIAgentGUI(ctk.CTk):
         def save():
             try:
                 updates = {
-                    'task_name': name_entry.get(),
-                    'agentic_prompt': prompt_entry.get()
+                    'task_name': name_entry.get()
                 }
+                
+                new_prompt = prompt_entry.get("0.0", "end").strip()
+                if data.get('task_type') == 'macro':
+                    updates['skills_content'] = new_prompt
+                else:
+                    updates['agentic_prompt'] = new_prompt
                 
                 raw_interval = interval_entry.get().strip()
                 if raw_interval.isdigit():
