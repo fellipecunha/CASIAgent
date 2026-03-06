@@ -14,6 +14,27 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import traceback
+
+class LoggerWriter:
+    def __init__(self, filename):
+        self.filename = filename
+    def write(self, message):
+        try:
+            with open(self.filename, 'a', encoding='utf-8') as f:
+                f.write(message)
+        except Exception:
+            pass
+    def flush(self):
+        pass
+
+log_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), 'agent_debug.log')
+sys.stdout = LoggerWriter(log_path)
+sys.stderr = sys.stdout
+    
+print("\\n\\n--- NEW SESSION ---")
+print(f"Agent started at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+
 # Setup paths
 if hasattr(sys, '_MEIPASS'):
     # Running in PyInstaller bundle
