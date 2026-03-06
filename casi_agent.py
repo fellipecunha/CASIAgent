@@ -16,6 +16,8 @@ load_dotenv()
 
 import traceback
 
+global_gui_app = None
+
 class LoggerWriter:
     def __init__(self, filename):
         self.filename = filename
@@ -25,6 +27,11 @@ class LoggerWriter:
                 f.write(message)
         except Exception:
             pass
+        if global_gui_app:
+            try:
+                global_gui_app.after(0, global_gui_app.append_log, message)
+            except Exception:
+                pass
     def flush(self):
         pass
 
@@ -71,22 +78,74 @@ def notify_user(title, message):
     except Exception as e:
         print(f"Failed to display toast: {e}")
 
-def create_tray_icon():
-    try:
-        if os.path.exists(ICON_PATH):
-            image = Image.open(ICON_PATH)
-        else:
-            image = Image.new('RGB', (64, 64), color=(0, 102, 204))
-    except Exception:
-        image = Image.new('RGB', (64, 64), color=(0, 102, 204))
+import customtkinter as ctk
 
-    def on_quit(icon, item):
-        icon.stop()
-        os._exit(0)
+class CASIAgentGUI(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("CASI Agent - Desktop Automation Core")
+        self.geometry("1100x700")
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("blue")
+        
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=1)
+        
+        # Sidebar Queue
+        self.sidebar_frame = ctk.CTkFrame(self, width=320, corner_radius=0)
+        self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
+        self.sidebar_frame.grid_rowconfigure(1, weight=1)
+        
+        self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="CASI Task Queue", font=ctk.CTkFont(size=22, weight="bold"))
+        self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
+        
+        self.queue_scrollable = ctk.CTkScrollableFrame(self.sidebar_frame, width=280)
+        self.queue_scrollable.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+        
+        # Main Viewer pane
+        self.main_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
+        self.main_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        self.main_frame.grid_rowconfigure(1, weight=1)
+        self.main_frame.grid_columnconfigure(0, weight=1)
+        
+        self.log_header = ctk.CTkLabel(self.main_frame, text="Live Execution Logic Logs", font=ctk.CTkFont(size=24, weight="bold"))
+        self.log_header.grid(row=0, column=0, sticky="nw", pady=(0, 10))
+        
+        self.log_box = ctk.CTkTextbox(self.main_frame, font=ctk.CTkFont(family="Consolas", size=13))
+        self.log_box.grid(row=1, column=0, sticky="nsew")
+        self.log_box.configure(state="disabled")
+        
+    def append_log(self, text):
+        if not self.winfo_exists(): return
+        self.log_box.configure(state="normal")
+        self.log_box.insert("end", text)
+        self.log_box.yview("end")
+        self.log_box.configure(state="disabled")
+        
+    def update_queue(self, tasks):
+        if not self.winfo_exists(): return
+        for widget in self.queue_scrollable.winfo_children():
+            widget.destroy()
+            
+        if not tasks:
+            lbl = ctk.CTkLabel(self.queue_scrollable, text="No local tasks pending.", text_color="gray")
+            lbl.pack(pady=20)
+            return
 
-    menu = pystray.Menu(pystray.MenuItem('Exit', on_quit))
-    icon = pystray.Icon("CASI Desktop Agent", image, "CASI (Cunha AI)", menu)
-    return icon
+        for t in tasks:
+            is_processing = t['status'] == 'processing'
+            color = "#ff9800" if is_processing else "#b0bec5"
+            bg_color = "#333333" if is_processing else "#2b2b2b"
+            
+            frame = ctk.CTkFrame(self.queue_scrollable, fg_color=bg_color)
+            frame.pack(fill="x", padx=5, pady=5)
+            
+            bold_font = ctk.CTkFont(size=14, weight="bold")
+            title_lbl = ctk.CTkLabel(frame, text=t['name'][:30], font=bold_font, justify="left", text_color="white")
+            title_lbl.pack(anchor="w", padx=10, pady=(5,0))
+            
+            stat_lbl = ctk.CTkLabel(frame, text=f"• {t['status'].upper()}", text_color=color, font=ctk.CTkFont(size=11))
+            stat_lbl.pack(anchor="w", padx=10, pady=(0,5))
 
 def antigravity_browser_tool(action, target):
     print(f"[AG-Browser-Tool] Executing: {action} on {target}")
@@ -223,6 +282,26 @@ def start_firebase_listener(db):
     # Create a callback to handle changes in the collection
     def on_snapshot(col_snapshot, changes, read_time):
         print(f"Snapshot received at {read_time}. Changes count: {len(changes)}")
+        
+        # --- Update the GUI Task Queue ---
+        if global_gui_app:
+            pending_list = []
+            for doc_snap in col_snapshot:
+                task_data = doc_snap.to_dict() or {}
+                if task_data.get('platform') == 'local':
+                    st = task_data.get('status', 'unknown')
+                    if st in ['pending', 'processing']:
+                        pending_list.append({
+                            'id': doc_snap.id, 
+                            'name': task_data.get('task_name', 'Unnamed Task'), 
+                            'status': st
+                        })
+            try:
+                global_gui_app.after(0, global_gui_app.update_queue, pending_list)
+            except Exception:
+                pass
+        
+        # Process individual doc changes logic
         for change in changes:
             doc = change.document
             data = doc.to_dict() or {}
@@ -250,6 +329,10 @@ def start_firebase_listener(db):
                 except Exception as e:
                     print(f"  -> Error trying to process doc {doc.id}: {e}")
                 
+    # Define query
+    col_query = db.collection('casi_local_tasks')
+    col_watch = col_query.on_snapshot(on_snapshot)
+    
     # Keep the daemon thread alive but do NOT poll here. Polling goes to a separate thread.
     while True:
         time.sleep(3600)
@@ -309,10 +392,17 @@ def run_agent():
         polling_thread = threading.Thread(target=start_polling_loop, args=(db,), daemon=True)
         polling_thread.start()
     
-    # Create and run System Tray icon (blocks the main thread)
-    print("Starting Desktop Engine Tray Icon...")
-    icon = create_tray_icon()
-    icon.run()
+    # Create and run visual CustomTkinter Windows GUI
+    print("Starting Main Visual Desktop Agent Interface...")
+    global global_gui_app
+    global_gui_app = CASIAgentGUI()
+    
+    # Run the UI Window, which blocks main thread (correct for desktops)
+    global_gui_app.mainloop()
+    
+    # Clean exit once user closes window
+    print("Closing Desktop interface...")
+    os._exit(0)
 
 if __name__ == "__main__":
     run_agent()
