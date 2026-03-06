@@ -5,3 +5,5 @@ plyer
 pyautogui
 python-dotenv
 pyinstaller
+openai
+playwright

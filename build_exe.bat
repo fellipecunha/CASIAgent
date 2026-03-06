@@ -12,8 +12,8 @@ rmdir /s /q dist
 :: --noconsole hides the cmd window (required for background agent)
 :: --icon adds our branding icon
 :: --add-data includes the icon file inside the exe package
-:: --hidden-import is needed for plyer's dynamic Windows notification platform
-python -m PyInstaller --noconsole --onefile --icon=casi_icon.ico --hidden-import plyer.platforms.win.notification --add-data "casi_icon.ico;." casi_agent.py
+:: --hidden-import ensures the Windows notifications, playwright browsers, and our Vision Agent logic are bundled
+python -m PyInstaller --noconsole --onefile --icon=casi_icon.ico --hidden-import plyer.platforms.win.notification --hidden-import casi_vision_agent --add-data "casi_icon.ico;." casi_agent.py
 
 echo Done!
 echo The lightweight executable is located at c:\CASI_agent\dist\casi_agent.exe

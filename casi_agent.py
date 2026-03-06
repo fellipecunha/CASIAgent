@@ -148,9 +148,14 @@ def process_task(db, doc):
         print(" -> Establishing vision & reasoning capabilities context...")
         print(" -> Autonomously controlling desktop applications...")
         with task_lock:
-            # Placeholder for Anthropic Computer Use APIs or actual Agent implementation
-            computer_use_app("Agentic Autonomy", f"Executing requested prompt: {agentic_prompt}")
-            time.sleep(5) # Simulate processing
+            try:
+                from casi_vision_agent import execute_vision_loop
+                execute_vision_loop(db, doc, task_name, agentic_prompt)
+            except ImportError:
+                print("Warning: casi_vision_agent.py not found or not packaged.")
+                computer_use_app("Agentic Autonomy", f"Failed to load vision module for: {agentic_prompt}")
+            except Exception as e:
+                print(f"Error executing intelligent vision loop: {e}")
     else:
         print(f"Unknown task type ({task_type}). Skipping execution layer.")
     

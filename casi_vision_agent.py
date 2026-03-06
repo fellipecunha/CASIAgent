@@ -152,14 +152,7 @@ def execute_vision_loop(db, doc, task_name, agentic_prompt):
     if os.path.exists(os.path.join(APP_DIR, "temp_screenshot.png")):
         os.remove(os.path.join(APP_DIR, "temp_screenshot.png"))
         
-    print("Updating task status in Firebase to completed...")
-    try:
-        db.collection('casi_local_tasks').document(doc.id).update({
-            'status': 'completed',
-            'completed_at': firestore.SERVER_TIMESTAMP
-        })
-    except Exception as e:
-        print(f"Failed to update task status: {e}")
+    print("Vision Loop Completed. Deferring Firebase status update to main process_task handler.")
 
 def start_firebase_listener(db):
     print("Firebase listener for AGENTIC tasks started. Monitoring casi_local_tasks...")
