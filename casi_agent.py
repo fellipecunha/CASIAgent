@@ -81,8 +81,9 @@ def notify_user(title, message):
 import customtkinter as ctk
 
 class CASIAgentGUI(ctk.CTk):
-    def __init__(self):
+    def __init__(self, db):
         super().__init__()
+        self.db = db
         self.title("CASI Agent - Desktop Automation Core")
         self.geometry("1100x700")
         ctk.set_appearance_mode("dark")
@@ -101,6 +102,9 @@ class CASIAgentGUI(ctk.CTk):
         
         self.queue_scrollable = ctk.CTkScrollableFrame(self.sidebar_frame, width=280)
         self.queue_scrollable.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+        
+        self.add_btn = ctk.CTkButton(self.sidebar_frame, text="+ Add New Task", command=self.add_task_gui, font=ctk.CTkFont(weight="bold"))
+        self.add_btn.grid(row=2, column=0, padx=20, pady=20, sticky="ew")
         
         # Main Viewer pane
         self.main_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -146,6 +150,99 @@ class CASIAgentGUI(ctk.CTk):
             
             stat_lbl = ctk.CTkLabel(frame, text=f"• {t['status'].upper()}", text_color=color, font=ctk.CTkFont(size=11))
             stat_lbl.pack(anchor="w", padx=10, pady=(0,5))
+            
+            btn_frame = ctk.CTkFrame(frame, fg_color="transparent")
+            btn_frame.pack(anchor="e", padx=10, pady=(0, 5))
+            
+            p_text = "Resume" if t['status'] == 'paused' else "Pause"
+            p_cmd = lambda tid=t['id'], st=t['status']: self.pause_resume_task(tid, st)
+            p_btn = ctk.CTkButton(btn_frame, text=p_text, width=50, height=24, font=ctk.CTkFont(size=11), command=p_cmd)
+            p_btn.pack(side="left", padx=2)
+            
+            e_btn = ctk.CTkButton(btn_frame, text="Edit", width=50, height=24, font=ctk.CTkFont(size=11), command=lambda tid=t['id']: self.edit_task_gui(tid))
+            e_btn.pack(side="left", padx=2)
+            
+            d_btn = ctk.CTkButton(btn_frame, text="Del", width=40, height=24, fg_color="#d32f2f", hover_color="#b71c1c", font=ctk.CTkFont(size=11), command=lambda tid=t['id']: self.delete_task(tid))
+            d_btn.pack(side="left", padx=2)
+            
+    def pause_resume_task(self, task_id, current_status):
+        new_status = 'pending' if current_status == 'paused' else 'paused'
+        try:
+            self.db.collection('casi_local_tasks').document(task_id).update({'status': new_status})
+        except Exception as e:
+            print(f"Failed to change status: {e}")
+
+    def delete_task(self, task_id):
+        try:
+            self.db.collection('casi_local_tasks').document(task_id).delete()
+        except Exception as e:
+            print(f"Failed to delete task: {e}")
+
+    def add_task_gui(self):
+        w = ctk.CTkToplevel(self)
+        w.title("Add New Agentic Task")
+        w.geometry("450x300")
+        w.grab_set()
+        
+        ctk.CTkLabel(w, text="Task Name:", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 0))
+        name_entry = ctk.CTkEntry(w, width=350)
+        name_entry.pack(pady=(5, 15))
+        
+        ctk.CTkLabel(w, text="Agentic Prompt (Goals & Logic):", font=ctk.CTkFont(weight="bold")).pack(pady=(5, 0))
+        prompt_entry = ctk.CTkEntry(w, width=350)
+        prompt_entry.pack(pady=(5, 20))
+        
+        def save():
+            try:
+                self.db.collection('casi_local_tasks').add({
+                    'task_name': name_entry.get(),
+                    'platform': 'local',
+                    'status': 'pending',
+                    'task_type': 'agentic',
+                    'agentic_prompt': prompt_entry.get(),
+                    'created_at': firestore.SERVER_TIMESTAMP
+                })
+                w.destroy()
+            except Exception as e:
+                print(f"Failed to add task: {e}")
+                
+        ctk.CTkButton(w, text="Save Task", command=save, fg_color="#4CAF50", hover_color="#388E3C").pack(pady=10)
+
+    def edit_task_gui(self, task_id):
+        try:
+            doc = self.db.collection('casi_local_tasks').document(task_id).get()
+            if not doc.exists: return
+            data = doc.to_dict()
+        except Exception as e:
+            print(f"Failed to fetch task: {e}")
+            return
+            
+        w = ctk.CTkToplevel(self)
+        w.title("Edit Task")
+        w.geometry("450x300")
+        w.grab_set()
+        
+        ctk.CTkLabel(w, text="Task Name:", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 0))
+        name_entry = ctk.CTkEntry(w, width=350)
+        name_entry.insert(0, data.get('task_name', ''))
+        name_entry.pack(pady=(5, 15))
+        
+        ctk.CTkLabel(w, text="Agentic Prompt:", font=ctk.CTkFont(weight="bold")).pack(pady=(5, 0))
+        prompt_entry = ctk.CTkEntry(w, width=350)
+        prompt_entry.insert(0, data.get('agentic_prompt', ''))
+        prompt_entry.pack(pady=(5, 20))
+        
+        def save():
+            try:
+                self.db.collection('casi_local_tasks').document(task_id).update({
+                    'task_name': name_entry.get(),
+                    'agentic_prompt': prompt_entry.get()
+                })
+                w.destroy()
+            except Exception as e:
+                print(f"Failed to edit task: {e}")
+                
+        ctk.CTkButton(w, text="Save Updates", command=save, fg_color="#2196F3", hover_color="#1976D2").pack(pady=10)
 
 def antigravity_browser_tool(action, target):
     print(f"[AG-Browser-Tool] Executing: {action} on {target}")
@@ -290,7 +387,7 @@ def start_firebase_listener(db):
                 task_data = doc_snap.to_dict() or {}
                 if task_data.get('platform') == 'local':
                     st = task_data.get('status', 'unknown')
-                    if st in ['pending', 'processing']:
+                    if st in ['pending', 'processing', 'paused']:
                         pending_list.append({
                             'id': doc_snap.id, 
                             'name': task_data.get('task_name', 'Unnamed Task'), 
@@ -394,7 +491,7 @@ def run_agent():
     # Create and run visual CustomTkinter Windows GUI
     print("Starting Main Visual Desktop Agent Interface...")
     global global_gui_app
-    global_gui_app = CASIAgentGUI()
+    global_gui_app = CASIAgentGUI(db)
     
     # Run the UI Window, which blocks main thread (correct for desktops)
     global_gui_app.mainloop()
