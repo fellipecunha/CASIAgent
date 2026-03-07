@@ -244,19 +244,23 @@ class CASIAgentGUI(ctk.CTk):
         w = ctk.CTkToplevel(self)
         w.title("Add New Agentic Task")
         w.geometry("450x450")
+        w.configure(fg_color=self._bg_color)
         w.grab_set()
         
-        ctk.CTkLabel(w, text="Task Name:", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 0))
-        name_entry = ctk.CTkEntry(w, width=350)
+        lbl_font = ctk.CTkFont(family="Segoe UI", size=13, weight="bold")
+        entry_font = ctk.CTkFont(family="Consolas", size=13)
+        
+        ctk.CTkLabel(w, text="Task Name:", font=lbl_font, text_color=self._text).pack(pady=(20, 0))
+        name_entry = ctk.CTkEntry(w, width=350, height=35, corner_radius=8, font=entry_font, fg_color=self._surface, border_color="#334155", text_color=self._text)
         name_entry.pack(pady=(5, 10))
         
-        ctk.CTkLabel(w, text="Agentic Prompt (Goals & Logic):", font=ctk.CTkFont(weight="bold")).pack(pady=(5, 0))
-        prompt_entry = ctk.CTkTextbox(w, width=350, height=100)
+        ctk.CTkLabel(w, text="Agentic Prompt (Goals & Logic):", font=lbl_font, text_color=self._text).pack(pady=(5, 0))
+        prompt_entry = ctk.CTkTextbox(w, width=350, height=110, corner_radius=8, font=entry_font, fg_color=self._surface, border_color="#334155", border_width=2, text_color=self._text)
         prompt_entry.pack(pady=(5, 10))
         
-        ctk.CTkLabel(w, text="Schedule Interval (Minutes, Optional):", font=ctk.CTkFont(weight="bold")).pack(pady=(5, 0))
-        interval_entry = ctk.CTkEntry(w, width=350, placeholder_text="e.g. 60")
-        interval_entry.pack(pady=(5, 20))
+        ctk.CTkLabel(w, text="Schedule Interval (Minutes, Optional):", font=lbl_font, text_color=self._text).pack(pady=(5, 0))
+        interval_entry = ctk.CTkEntry(w, width=350, height=35, placeholder_text="e.g. 60", corner_radius=8, font=entry_font, fg_color=self._surface, border_color="#334155", text_color=self._text)
+        interval_entry.pack(pady=(5, 25))
         
         def save():
             try:
@@ -278,7 +282,7 @@ class CASIAgentGUI(ctk.CTk):
             except Exception as e:
                 print(f"Failed to add task: {e}")
                 
-        ctk.CTkButton(w, text="Save Task", command=save, fg_color="#4CAF50", hover_color="#388E3C").pack(pady=10)
+        ctk.CTkButton(w, text="Save Task", command=save, fg_color=self._accent_green, hover_color=self._accent_green_hover, font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"), height=40, corner_radius=8).pack(pady=10)
 
     def edit_task_gui(self, task_id):
         try:
@@ -292,25 +296,29 @@ class CASIAgentGUI(ctk.CTk):
         w = ctk.CTkToplevel(self)
         w.title("Edit Task")
         w.geometry("450x450")
+        w.configure(fg_color=self._bg_color)
         w.grab_set()
         
-        ctk.CTkLabel(w, text="Task Name:", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 0))
-        name_entry = ctk.CTkEntry(w, width=350)
+        lbl_font = ctk.CTkFont(family="Segoe UI", size=13, weight="bold")
+        entry_font = ctk.CTkFont(family="Consolas", size=13)
+        
+        ctk.CTkLabel(w, text="Task Name:", font=lbl_font, text_color=self._text).pack(pady=(20, 0))
+        name_entry = ctk.CTkEntry(w, width=350, height=35, corner_radius=8, font=entry_font, fg_color=self._surface, border_color="#334155", text_color=self._text)
         name_entry.insert(0, data.get('task_name', ''))
         name_entry.pack(pady=(5, 10))
         
-        ctk.CTkLabel(w, text="Prompt / Logic:", font=ctk.CTkFont(weight="bold")).pack(pady=(5, 0))
-        prompt_entry = ctk.CTkTextbox(w, width=350, height=100)
+        ctk.CTkLabel(w, text="Prompt / Logic:", font=lbl_font, text_color=self._text).pack(pady=(5, 0))
+        prompt_entry = ctk.CTkTextbox(w, width=350, height=110, corner_radius=8, font=entry_font, fg_color=self._surface, border_color="#334155", border_width=2, text_color=self._text)
         prompt_text = data.get('agentic_prompt', data.get('skills_content', ''))
         prompt_entry.insert("0.0", prompt_text)
         prompt_entry.pack(pady=(5, 10))
         
-        ctk.CTkLabel(w, text="Schedule Interval (Minutes, Optional):", font=ctk.CTkFont(weight="bold")).pack(pady=(5, 0))
-        interval_entry = ctk.CTkEntry(w, width=350)
+        ctk.CTkLabel(w, text="Schedule Interval (Minutes, Optional):", font=lbl_font, text_color=self._text).pack(pady=(5, 0))
+        interval_entry = ctk.CTkEntry(w, width=350, height=35, corner_radius=8, font=entry_font, fg_color=self._surface, border_color="#334155", text_color=self._text)
         interval = data.get('interval_minutes', '')
         if interval:
             interval_entry.insert(0, str(interval))
-        interval_entry.pack(pady=(5, 20))
+        interval_entry.pack(pady=(5, 25))
         
         def save():
             try:
@@ -335,7 +343,7 @@ class CASIAgentGUI(ctk.CTk):
             except Exception as e:
                 print(f"Failed to edit task: {e}")
                 
-        ctk.CTkButton(w, text="Save Updates", command=save, fg_color="#2196F3", hover_color="#1976D2").pack(pady=10)
+        ctk.CTkButton(w, text="Save Updates", command=save, fg_color=self._primary, hover_color=self._primary_hover, font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"), height=40, corner_radius=8).pack(pady=10)
 
 def antigravity_browser_tool(action, target):
     print(f"[AG-Browser-Tool] Executing: {action} on {target}")
